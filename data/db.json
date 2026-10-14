@@ -1,0 +1,16 @@
+{
+  "users": {
+    "usr_n39tpbtigmv7m4j68": {
+      "id": "usr_n39tpbtigmv7m4j68",
+      "email": "test@scandoc.vn",
+      "name": "Phong Test",
+      "passwordHash": "$2b$10$D6bwB1jBXqONoLg7sIkfSurI.zsLXEZwig8mfhLoqkX7kumaFnL.6",
+      "usedBytes": 0,
+      "createdAt": 1791952288784,
+      "updatedAt": 1791952288784
+    }
+  },
+  "documents": {},
+  "pages": {},
+  "files": {}
+}

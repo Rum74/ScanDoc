@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="vi" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>ScanDoc - Máy quét tài liệu di động thông minh</title>
+    <meta name="description" content="Ứng dụng PWA scan tài liệu bằng điện thoại thông minh, nhận diện góc tự động, chỉnh phối cảnh, bộ lọc tăng cường, xuất PDF và tự động đồng bộ." />
+    
+    <!-- PWA & Mobile Meta -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ScanDoc" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- OpenGraph & Social -->
+    <meta property="og:title" content="ScanDoc - Máy quét tài liệu di động thông minh" />
+    <meta property="og:description" content="Ứng dụng PWA scan tài liệu bằng điện thoại thông minh, nhận diện góc tự động, chỉnh phối cảnh, bộ lọc tăng cường, xuất PDF và tự động đồng bộ." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+  </head>
+  <body class="h-full bg-slate-900 text-slate-100 antialiased selection:bg-emerald-500 selection:text-white overflow-hidden">
+    <div id="root" class="h-full w-full flex flex-col"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

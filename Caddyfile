@@ -1,0 +1,36 @@
+{$DOMAIN:localhost} {
+    # Encode with gzip and zstandard
+    encode gzip zstd
+
+    # Request body limit (25MB for scan documents and images)
+    request_body {
+        max_size 25MB
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Route API requests to Node.js backend
+    handle /api/* {
+        reverse_proxy api:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # All other static frontend requests to web container
+    handle {
+        reverse_proxy web:80
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
