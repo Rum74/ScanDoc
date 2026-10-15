@@ -13,6 +13,8 @@ interface ScanState {
   filter: FilterType;
   brightness: number;
   contrast: number;
+  sharpen: number;
+  denoise: number;
   processedPreviewBlob: Blob | null;
   thumbnailBlob: Blob | null;
   isDetecting: boolean;
@@ -31,6 +33,8 @@ interface ScanState {
   setFilter: (filter: FilterType) => void;
   setBrightness: (brightness: number) => void;
   setContrast: (contrast: number) => void;
+  setSharpen: (sharpen: number) => void;
+  setDenoise: (denoise: number) => void;
   rotateClockwise: () => void;
   rotateCounterClockwise: () => void;
 
@@ -56,6 +60,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
   filter: 'enhanced',
   brightness: 0,
   contrast: 0,
+  sharpen: 0,
+  denoise: 0,
   processedPreviewBlob: null,
   thumbnailBlob: null,
   isDetecting: false,
@@ -124,6 +130,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
   setFilter: (filter) => set({ filter }),
   setBrightness: (brightness) => set({ brightness }),
   setContrast: (contrast) => set({ contrast }),
+  setSharpen: (sharpen) => set({ sharpen }),
+  setDenoise: (denoise) => set({ denoise }),
 
   rotateClockwise: () => {
     const current = get().rotation;
@@ -136,7 +144,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
   },
 
   generateProcessedPreview: async () => {
-    const { originalBlob, corners, rotation, filter, brightness, contrast } = get();
+    const { originalBlob, corners, rotation, filter, brightness, contrast, sharpen, denoise } = get();
     if (!originalBlob) return;
 
     try {
@@ -147,7 +155,9 @@ export const useScanStore = create<ScanState>((set, get) => ({
         rotation,
         filter,
         brightness,
-        contrast
+        contrast,
+        sharpen,
+        denoise
       );
       set({ processedPreviewBlob: processedBlob, thumbnailBlob, isProcessing: false });
     } catch (err) {
@@ -168,6 +178,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
       filter: 'enhanced',
       brightness: 0,
       contrast: 0,
+      sharpen: 0,
+      denoise: 0,
       processedPreviewBlob: null,
       thumbnailBlob: null,
       isDetecting: false,

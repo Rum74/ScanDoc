@@ -105,7 +105,9 @@ export async function processPageImage(
   rotation: number = 0,
   filter: FilterType = 'enhanced',
   brightness: number = 0,
-  contrast: number = 0
+  contrast: number = 0,
+  sharpen: number = 0,
+  denoise: number = 0
 ): Promise<{ processedBlob: Blob; thumbnailBlob: Blob }> {
   const img = await blobToImage(originalBlob);
   const W = img.naturalWidth || img.width;
@@ -169,6 +171,8 @@ export async function processPageImage(
       filter,
       brightness,
       contrast,
+      sharpen,
+      denoise,
     },
     [imgData.data.buffer]
   );

@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Zap, ZapOff, Image as ImageIcon, X, AlertTriangle } from 'lucide-react';
+import {
+  Camera,
+  Zap,
+  ZapOff,
+  Image as ImageIcon,
+  X,
+  AlertTriangle,
+  Sparkles,
+  CheckCircle,
+} from 'lucide-react';
 import { useScanStore } from '../../store/useScanStore.ts';
 import { useDocStore } from '../../store/useDocStore.ts';
 
@@ -11,6 +20,13 @@ export const CameraCapture: React.FC = () => {
   const [torchOn, setTorchOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+
+  // Auto-capture states
+  const [isAutoCapture, setIsAutoCapture] = useState(true);
+  const [isDocumentDetected, setIsDocumentDetected] = useState(false);
+  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+  const stableCounterRef = useRef<number>(0);
+  const countdownIntervalRef = useRef<any>(null);
 
   const { setCapturedBlob } = useScanStore();
   const { setView } = useDocStore();
@@ -40,7 +56,6 @@ export const CameraCapture: React.FC = () => {
           await videoRef.current.play();
         }
 
-        // Check if torch/flash is supported
         const track = mediaStream.getVideoTracks()[0];
         const capabilities = track.getCapabilities?.() as any;
         if (capabilities && capabilities.torch) {
@@ -60,10 +75,82 @@ export const CameraCapture: React.FC = () => {
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
       }
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
   }, []);
 
-  // Toggle Torch
+  // Real-time auto-capture detection loop
+  useEffect(() => {
+    if (!isAutoCapture || isCapturing) return;
+
+    const interval = setInterval(() => {
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+
+      const video = videoRef.current;
+      // Offscreen quick sample canvas
+      const sampleW = 160;
+      const sampleH = 120;
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = sampleW;
+      offCanvas.height = sampleH;
+      const ctx = offCanvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(video, 0, 0, sampleW, sampleH);
+      const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
+      // Sample contrast & document presence in center region
+      let centerLum = 0;
+      let centerCount = 0;
+      for (let y = 30; y < 90; y += 4) {
+        for (let x = 40; x < 120; x += 4) {
+          const idx = (y * sampleW + x) * 4;
+          centerLum += 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+          centerCount++;
+        }
+      }
+      const avgLum = centerCount ? centerLum / centerCount : 0;
+
+      // Document paper brightness is typically > 110
+      if (avgLum > 105 && avgLum < 245) {
+        setIsDocumentDetected(true);
+        stableCounterRef.current += 1;
+
+        // When stable for 3 checks (~1.2s), trigger auto countdown
+        if (stableCounterRef.current >= 3 && autoCountdown === null) {
+          startCountdown();
+        }
+      } else {
+        setIsDocumentDetected(false);
+        stableCounterRef.current = 0;
+        if (autoCountdown !== null) {
+          clearInterval(countdownIntervalRef.current);
+          setAutoCountdown(null);
+        }
+      }
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, [isAutoCapture, isCapturing, autoCountdown]);
+
+  const startCountdown = () => {
+    let count = 2;
+    setAutoCountdown(count);
+
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    countdownIntervalRef.current = setInterval(() => {
+      count -= 1;
+      if (count > 0) {
+        setAutoCountdown(count);
+      } else {
+        clearInterval(countdownIntervalRef.current);
+        setAutoCountdown(null);
+        handleCapture();
+      }
+    }, 600);
+  };
+
   const toggleTorch = async () => {
     if (!stream) return;
     const track = stream.getVideoTracks()[0];
@@ -80,14 +167,12 @@ export const CameraCapture: React.FC = () => {
     }
   };
 
-  // Capture Image from Video Stream
   const handleCapture = async () => {
     if (!videoRef.current || isCapturing) return;
 
     try {
       setIsCapturing(true);
-      // Subtle vibration
-      if (navigator.vibrate) navigator.vibrate(40);
+      if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
 
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
@@ -102,7 +187,6 @@ export const CameraCapture: React.FC = () => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Chụp ảnh thất bại'))), 'image/jpeg', 0.95);
       });
 
-      // Stop camera track before moving
       if (stream) {
         stream.getTracks().forEach((t) => t.stop());
       }
@@ -115,7 +199,6 @@ export const CameraCapture: React.FC = () => {
     }
   };
 
-  // Pick from file gallery
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -138,7 +221,6 @@ export const CameraCapture: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-40 bg-black flex flex-col justify-between overflow-hidden select-none">
-      {/* Hidden file input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -148,7 +230,7 @@ export const CameraCapture: React.FC = () => {
       />
 
       {/* Top action bar */}
-      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+      <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent">
         <button
           onClick={handleClose}
           className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white flex items-center justify-center active:scale-95 transition"
@@ -156,9 +238,21 @@ export const CameraCapture: React.FC = () => {
           <X className="w-5 h-5" />
         </button>
 
-        <div className="text-xs font-semibold tracking-wider uppercase text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full backdrop-blur-md">
-          Chế độ quét tự động
-        </div>
+        {/* Auto capture toggle button */}
+        <button
+          onClick={() => {
+            setIsAutoCapture(!isAutoCapture);
+            setAutoCountdown(null);
+          }}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border transition flex items-center gap-1.5 ${
+            isAutoCapture
+              ? 'bg-emerald-600/90 border-emerald-400 text-white shadow-lg shadow-emerald-500/20'
+              : 'bg-black/50 border-white/20 text-slate-300'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>{isAutoCapture ? 'Tự động chụp: BẬT' : 'Chụp thủ công'}</span>
+        </button>
 
         {hasTorch ? (
           <button
@@ -200,25 +294,59 @@ export const CameraCapture: React.FC = () => {
             />
 
             {/* Document Guide Reticle Overlay */}
-            <div className="absolute inset-8 pointer-events-none flex flex-col justify-between border-2 border-emerald-400/40 rounded-2xl shadow-[0_0_0_2000px_rgba(0,0,0,0.45)]">
-              {/* Corner Brackets */}
+            <div
+              className={`absolute inset-8 pointer-events-none flex flex-col justify-between border-2 rounded-2xl transition-all duration-300 shadow-[0_0_0_2000px_rgba(0,0,0,0.45)] ${
+                isDocumentDetected
+                  ? 'border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.5)]'
+                  : 'border-white/30'
+              }`}
+            >
               <div className="flex justify-between p-1">
-                <div className="w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
-                <div className="w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
+                <div
+                  className={`w-7 h-7 border-t-4 border-l-4 rounded-tl-lg transition-colors ${
+                    isDocumentDetected ? 'border-emerald-400' : 'border-white'
+                  }`}
+                />
+                <div
+                  className={`w-7 h-7 border-t-4 border-r-4 rounded-tr-lg transition-colors ${
+                    isDocumentDetected ? 'border-emerald-400' : 'border-white'
+                  }`}
+                />
               </div>
 
-              {/* Scanning laser line animation */}
+              {/* Scanning laser line */}
               <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] animate-pulse" />
 
               <div className="flex justify-between p-1">
-                <div className="w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
-                <div className="w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
+                <div
+                  className={`w-7 h-7 border-b-4 border-l-4 rounded-bl-lg transition-colors ${
+                    isDocumentDetected ? 'border-emerald-400' : 'border-white'
+                  }`}
+                />
+                <div
+                  className={`w-7 h-7 border-b-4 border-r-4 rounded-br-lg transition-colors ${
+                    isDocumentDetected ? 'border-emerald-400' : 'border-white'
+                  }`}
+                />
               </div>
             </div>
 
+            {/* Auto countdown overlay */}
+            {autoCountdown !== null && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-24 h-24 rounded-full bg-emerald-500/80 backdrop-blur-md border-4 border-white flex items-center justify-center text-4xl font-black text-white shadow-2xl animate-ping">
+                  {autoCountdown}
+                </div>
+              </div>
+            )}
+
             <div className="absolute bottom-28 pointer-events-none text-center">
               <span className="px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white text-xs font-medium shadow-lg">
-                Đặt tài liệu phẳng trong khung để tự nhận diện
+                {isAutoCapture
+                  ? isDocumentDetected
+                    ? 'Giữ yên máy để tự chụp...'
+                    : 'Giơ máy vào tài liệu để tự nhận diện'
+                  : 'Bấm nút chụp bên dưới'}
               </span>
             </div>
           </>
@@ -227,7 +355,6 @@ export const CameraCapture: React.FC = () => {
 
       {/* Bottom Controls Bar */}
       <div className="absolute bottom-0 left-0 right-0 z-50 p-6 pb-8 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex items-center justify-around">
-        {/* Gallery button */}
         <button
           onClick={() => fileInputRef.current?.click()}
           className="w-12 h-12 rounded-full bg-slate-800/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-center active:scale-95 transition"
@@ -251,7 +378,6 @@ export const CameraCapture: React.FC = () => {
           </div>
         </button>
 
-        {/* Balance spacer */}
         <div className="w-12 h-12" />
       </div>
     </div>

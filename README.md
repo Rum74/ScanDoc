@@ -1,80 +1,87 @@
-# ScanDoc - Ứng dụng PWA Quét Tài Liệu Di Động
+# ScanDoc - Hướng dẫn triển khai cho scandoc.click trên VPS (221.121.1.220)
 
-ScanDoc là ứng dụng PWA quét tài liệu chuyên nghiệp, giao diện tiếng Việt, mobile-first, hoạt động ngoại tuyến (Offline-First) với IndexedDB và tự động đồng bộ khi có kết nối mạng.
-
-## Tính năng chính
-- 📷 **Chụp & nhận diện viền thông minh**: Quét trực tiếp qua camera sau, nhận diện 4 góc tài liệu theo thời gian thực (tối ưu xử lý qua Web Worker, thu nhỏ ảnh ~800px trước khi dò biên).
-- 🔍 **Chỉnh 4 góc phối cảnh (Perspective Warp)**: Tự do kéo 4 điểm góc kèm kính lúp phóng to 2.5x chính xác từng điểm ảnh.
-- 🎨 **5 Bộ lọc tài liệu**:
-  - Gốc (Original)
-  - Màu tăng cường (Magic Color)
-  - Xám (Grayscale)
-  - Đen trắng văn bản (B&W Adaptive Threshold)
-  - Khử bóng điện thoại (Shadow Removal)
-- 📄 **Quản lý đa trang & Xuất PDF**: Chụp liên tục nhiều trang, sắp xếp thứ tự, xuất file PDF đa trang theo chất lượng (Nhỏ / Vừa / Cao), Web Share chia sẻ trực tiếp.
-- 🔤 **OCR Tiếng Việt & Tiếng Anh**: Nhận dạng chữ viết, tìm kiếm toàn văn và sao chép văn bản.
-- ☁️ **Đồng bộ đa thiết bị (Offline-First)**:
-  - Có thể sử dụng ngay mà không cần tài khoản (lưu cục bộ IndexedDB).
-  - Đăng ký/đăng nhập để tự động đồng bộ ngầm khi có mạng (Outbox queue, xung đột giải quyết theo `updatedAt` mới nhất).
+Hệ thống đã được đóng gói và cấu hình sẵn sàng 100% để chạy tên miền **scandoc.click** trên máy chủ VPS IP **221.121.1.220**.
 
 ---
 
-## Hướng dẫn triển khai lên VPS bằng Docker
+## BƯỚC 1: Cấu hình DNS Tên Miền (Tại nơi quản lý domain của bạn)
 
-### 1. Chuẩn bị VPS
-Yêu cầu hệ điều hành Ubuntu 20.04 / 22.04 / Debian, RAM tối thiểu 1GB.
+Đăng nhập vào trang quản trị tên miền `scandoc.click` (Cloudflare, Namecheap, GoDaddy, Pavietnam, Matbao...) và thêm 2 bản ghi sau:
 
-Cài đặt Docker & Docker Compose:
+| Loại (Type) | Tên (Host / Name) | Giá trị (IP Address) | Proxy / TTL |
+| :--- | :--- | :--- | :--- |
+| **A** | `@` (hoặc `scandoc.click`) | **`221.121.1.220`** | DNS only (Tắt đám mây cam nếu dùng Cloudflare) |
+| **A** | `www` | **`221.121.1.220`** | DNS only |
+
+> 💡 **Lưu ý**: Caddy sẽ tự động kết nối Let's Encrypt để xin chứng chỉ SSL HTTPS miễn phí cho `scandoc.click` và `www.scandoc.click` ngay khi DNS nhận diện IP.
+
+---
+
+## BƯỚC 2: Đăng nhập vào VPS qua SSH
+
+Mở Terminal trên máy tính của bạn và đăng nhập vào VPS:
 ```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
+ssh root@221.121.1.220
 ```
 
-### 2. Mở cổng tường lửa (UFW)
-Mở cổng 80 (HTTP) và 443 (HTTPS):
+---
+
+## BƯỚC 3: Đưa mã nguồn lên VPS & Chạy 1 Lệnh Tự Động
+
+### Cách A: Tải và triển khai trực tiếp bằng 1 lệnh trên VPS
+Tại terminal của VPS, bạn chỉ cần chạy:
+
 ```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw reload
+mkdir -p /opt/scandoc && cd /opt/scandoc
+
+# Nếu bạn đẩy code lên Git (GitHub/GitLab):
+# git clone <link-repo-cua-ban> .
+
+# Chạy script tự động cài đặt Docker, mở cổng và khởi chạy:
+sudo bash scripts/deploy.sh
 ```
 
-### 3. Trỏ tên miền DNS
-Trỏ bản ghi `A` của tên miền (ví dụ: `scandoc.yourdomain.com`) về địa chỉ IP công khai của VPS.
-
-### 4. Cấu hình biến môi trường
-Clone mã nguồn vào VPS:
+### Cách B: Copy trực tiếp thư mục dự án từ máy tính lên VPS qua SCP
+Nếu mã nguồn đang ở trên máy tính của bạn:
 ```bash
-cd /opt
-git clone <your-repo-url> scandoc
-cd scandoc
+# Chạy lệnh này từ máy tính của bạn:
+scp -r ./* root@221.121.1.220:/opt/scandoc/
 
-cp .env.example .env
-nano .env
-```
-Cập nhật các thông số quan trọng trong `.env`:
-- `DOMAIN`: Tên miền của bạn (ví dụ: `scandoc.yourdomain.com`). Caddy sẽ tự động cấp chứng chỉ SSL Let's Encrypt miễn phí.
-- `JWT_SECRET` & `REFRESH_SECRET`: Chuỗi ngẫu nhiên bảo mật dài tối thiểu 32 ký tự.
-- `MAX_USER_BYTES`: Hạn mức lưu trữ mỗi tài khoản (mặc định 1GB = `1073741824`).
-
-### 5. Khởi chạy hệ thống bằng Docker Compose
-```bash
-docker compose up -d --build
+# Sau đó đăng nhập vào VPS và chạy:
+ssh root@221.121.1.220
+cd /opt/scandoc
+sudo bash scripts/deploy.sh
 ```
 
-### 6. Kiểm tra trạng thái hoạt động
-Kiểm tra API Health Check:
-```bash
-curl -f https://scandoc.yourdomain.com/api/health
-```
-Hoặc kiểm tra log:
-```bash
-docker compose logs -f api
-```
+---
 
-### 7. Sao lưu định kỳ (Crontab)
-Tự động sao lưu cơ sở dữ liệu MongoDB và tệp ảnh vào 2h sáng hàng ngày:
+## BƯỚC 4: Kiểm tra hoạt động
+
+1. **Kiểm tra trạng thái container:**
+   ```bash
+   docker compose ps
+   ```
+   Bạn sẽ thấy 4 container đều ở trạng thái `running` (hoặc `healthy`):
+   - `caddy` (Cổng 80, 443 với SSL tự động)
+   - `web` (Giao diện PWA ScanDoc)
+   - `api` (Backend Express + JWT + Multer)
+   - `mongo` (Cơ sở dữ liệu MongoDB an toàn nội bộ)
+
+2. **Kiểm tra API trực tiếp trên VPS:**
+   ```bash
+   curl -f http://localhost:3000/api/health
+   ```
+
+3. **Truy cập từ trình duyệt điện thoại hoặc máy tính:**
+   - 👉 **https://scandoc.click**
+   - 👉 **https://www.scandoc.click**
+
+---
+
+## BƯỚC 5: Thiết lập sao lưu tự động hàng ngày (Khuyên dùng)
+
+Trên VPS, chạy lệnh sau để tự động sao lưu MongoDB và ảnh scan lúc 2h sáng mỗi ngày:
 ```bash
-chmod +x scripts/backup.sh
+chmod +x /opt/scandoc/scripts/backup.sh
 (crontab -l 2>/dev/null; echo "0 2 * * * /opt/scandoc/scripts/backup.sh >> /var/log/scandoc_backup.log 2>&1") | crontab -
 ```

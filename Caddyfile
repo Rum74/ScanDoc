@@ -1,4 +1,8 @@
-{$DOMAIN:localhost} {
+www.{$DOMAIN:scandoc.click} {
+    redir https://{$DOMAIN:scandoc.click}{uri} permanent
+}
+
+{$DOMAIN:scandoc.click} {
     # Encode with gzip and zstandard
     encode gzip zstd
 

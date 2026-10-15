@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -15,9 +16,25 @@ async function startServer() {
   if (process.env.NODE_ENV === 'production') {
     // Serve production static assets from dist
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+    const indexHtml = path.resolve(distPath, 'index.html');
+
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
+
+    app.get('*', (req, res, next) => {
+      // Don't intercept API routes
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+
+      if (fs.existsSync(indexHtml)) {
+        res.sendFile(indexHtml);
+      } else if (fs.existsSync(path.resolve(__dirname, 'index.html'))) {
+        res.sendFile(path.resolve(__dirname, 'index.html'));
+      } else {
+        res.status(404).send('ScanDoc: Trang giao diện chưa được biên dịch. Vui lòng kiểm tra thư mục dist.');
+      }
     });
   } else {
     // Development mode: attach Vite middleware

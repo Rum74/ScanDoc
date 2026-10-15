@@ -9,10 +9,16 @@ import {
   Sun,
   Contrast,
   Sparkles,
+  PenTool,
+  EyeOff,
+  Feather,
+  Zap,
 } from 'lucide-react';
 import { useScanStore } from '../../store/useScanStore.ts';
 import { useDocStore } from '../../store/useDocStore.ts';
 import { FilterType, LocalPage } from '../../lib/db.ts';
+import { SignatureModal } from './SignatureModal.tsx';
+import { RedactModal } from './RedactModal.tsx';
 
 export const PageEditor: React.FC = () => {
   const {
@@ -22,12 +28,16 @@ export const PageEditor: React.FC = () => {
     filter,
     brightness,
     contrast,
+    sharpen,
+    denoise,
     processedPreviewBlob,
     thumbnailBlob,
     isProcessing,
     setFilter,
     setBrightness,
     setContrast,
+    setSharpen,
+    setDenoise,
     rotateClockwise,
     rotateCounterClockwise,
     generateProcessedPreview,
@@ -48,6 +58,8 @@ export const PageEditor: React.FC = () => {
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [showSliders, setShowSliders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showRedactModal, setShowRedactModal] = useState(false);
 
   // Update object URL for preview
   useEffect(() => {
@@ -60,7 +72,6 @@ export const PageEditor: React.FC = () => {
     }
   }, [processedPreviewBlob]);
 
-  // Handle Filter Change
   const handleFilterSelect = async (f: FilterType) => {
     setFilter(f);
     setTimeout(() => {
@@ -80,6 +91,49 @@ export const PageEditor: React.FC = () => {
     generateProcessedPreview();
   };
 
+  // Stamp signature onto current image
+  const handleApplySignature = async (sigDataUrl: string) => {
+    if (!processedPreviewBlob) return;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const baseImg = new Image();
+    baseImg.src = URL.createObjectURL(processedPreviewBlob);
+    await new Promise((res) => (baseImg.onload = res));
+
+    canvas.width = baseImg.width;
+    canvas.height = baseImg.height;
+    ctx.drawImage(baseImg, 0, 0);
+
+    const sigImg = new Image();
+    sigImg.src = sigDataUrl;
+    await new Promise((res) => (sigImg.onload = res));
+
+    // Place signature at bottom-right corner
+    const sigW = Math.round(canvas.width * 0.35);
+    const sigH = Math.round((sigImg.height / sigImg.width) * sigW);
+    const sigX = canvas.width - sigW - Math.round(canvas.width * 0.08);
+    const sigY = canvas.height - sigH - Math.round(canvas.height * 0.08);
+
+    ctx.drawImage(sigImg, sigX, sigY, sigW, sigH);
+
+    canvas.toBlob(
+      (b) => {
+        if (b) {
+          useScanStore.setState({ processedPreviewBlob: b });
+        }
+      },
+      'image/jpeg',
+      0.95
+    );
+  };
+
+  // Redact replacement
+  const handleApplyRedact = (newBlob: Blob) => {
+    useScanStore.setState({ processedPreviewBlob: newBlob });
+  };
+
   // Helper to persist page
   const saveCurrentPage = async (): Promise<string> => {
     if (!originalBlob || !processedPreviewBlob || !thumbnailBlob) {
@@ -89,7 +143,6 @@ export const PageEditor: React.FC = () => {
     setIsSaving(true);
     let docId = targetDocumentId || activeDocument?.id;
 
-    // If no document exists, create a new one
     if (!docId) {
       const newDoc = await createDocument();
       docId = newDoc.id;
@@ -107,6 +160,8 @@ export const PageEditor: React.FC = () => {
       filter,
       brightness,
       contrast,
+      sharpen,
+      denoise,
       processedBlob: processedPreviewBlob,
       thumbnailBlob,
       updatedAt: now,
@@ -123,7 +178,6 @@ export const PageEditor: React.FC = () => {
     return docId;
   };
 
-  // Action: Add another page immediately
   const handleAddMorePages = async () => {
     try {
       const docId = await saveCurrentPage();
@@ -135,7 +189,6 @@ export const PageEditor: React.FC = () => {
     }
   };
 
-  // Action: Complete and open document detail view
   const handleDone = async () => {
     try {
       const docId = await saveCurrentPage();
@@ -171,14 +224,21 @@ export const PageEditor: React.FC = () => {
           Chỉnh sửa & Bộ lọc
         </span>
 
-        {/* Rotate controls in header for quick access */}
-        <div className="flex items-center gap-1">
+        {/* Rotate and Extra Tools */}
+        <div className="flex items-center gap-1.5">
           <button
-            onClick={() => handleRotate(false)}
-            className="p-2 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white active:scale-95 transition"
-            title="Xoay trái 90°"
+            onClick={() => setShowSignatureModal(true)}
+            className="p-2 rounded-xl bg-slate-800/80 text-blue-400 hover:text-blue-300 active:scale-95 transition"
+            title="Ký tên lên tài liệu"
           >
-            <RotateCcw className="w-4 h-4" />
+            <PenTool className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowRedactModal(true)}
+            className="p-2 rounded-xl bg-slate-800/80 text-rose-400 hover:text-rose-300 active:scale-95 transition"
+            title="Che mờ thông tin nhạy cảm"
+          >
+            <EyeOff className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleRotate(true)}
@@ -195,7 +255,7 @@ export const PageEditor: React.FC = () => {
         {isProcessing ? (
           <div className="flex flex-col items-center gap-3">
             <span className="animate-spin rounded-full h-8 w-8 border-3 border-emerald-400 border-t-transparent" />
-            <span className="text-xs font-medium text-emerald-300">Đang áp dụng bộ lọc...</span>
+            <span className="text-xs font-medium text-emerald-300">Đang tinh chỉnh tài liệu...</span>
           </div>
         ) : previewUrl ? (
           <img
@@ -206,52 +266,93 @@ export const PageEditor: React.FC = () => {
         ) : null}
       </div>
 
-      {/* Adjust Sliders Drawer (Collapsible) */}
+      {/* Adjust Sliders Drawer (Brightness, Contrast, Sharpen, Denoise) */}
       {showSliders && (
-        <div className="p-4 bg-slate-900/95 border-t border-slate-800 space-y-3 animate-in slide-in-from-bottom duration-150">
-          <div>
-            <div className="flex justify-between text-xs text-slate-300 mb-1">
-              <span className="flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                Độ sáng
-              </span>
-              <span className="font-semibold text-white">{brightness}</span>
+        <div className="p-4 bg-slate-900/98 border-t border-slate-800 space-y-3.5 animate-in slide-in-from-bottom duration-150 max-h-56 overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="flex justify-between text-xs text-slate-300 mb-1">
+                <span className="flex items-center gap-1">
+                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  Độ sáng
+                </span>
+                <span className="font-semibold text-white">{brightness}</span>
+              </div>
+              <input
+                type="range"
+                min="-40"
+                max="40"
+                value={brightness}
+                onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
+                onPointerUp={handleSliderChange}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
             </div>
-            <input
-              type="range"
-              min="-40"
-              max="40"
-              value={brightness}
-              onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
-              onPointerUp={handleSliderChange}
-              className="w-full accent-emerald-500 cursor-pointer"
-            />
-          </div>
 
-          <div>
-            <div className="flex justify-between text-xs text-slate-300 mb-1">
-              <span className="flex items-center gap-1.5">
-                <Contrast className="w-3.5 h-3.5 text-blue-400" />
-                Độ tương phản
-              </span>
-              <span className="font-semibold text-white">{contrast}</span>
+            <div>
+              <div className="flex justify-between text-xs text-slate-300 mb-1">
+                <span className="flex items-center gap-1">
+                  <Contrast className="w-3.5 h-3.5 text-blue-400" />
+                  Tương phản
+                </span>
+                <span className="font-semibold text-white">{contrast}</span>
+              </div>
+              <input
+                type="range"
+                min="-40"
+                max="40"
+                value={contrast}
+                onChange={(e) => setContrast(parseInt(e.target.value, 10))}
+                onPointerUp={handleSliderChange}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
             </div>
-            <input
-              type="range"
-              min="-40"
-              max="40"
-              value={contrast}
-              onChange={(e) => setContrast(parseInt(e.target.value, 10))}
-              onPointerUp={handleSliderChange}
-              className="w-full accent-emerald-500 cursor-pointer"
-            />
+
+            <div>
+              <div className="flex justify-between text-xs text-slate-300 mb-1">
+                <span className="flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-yellow-400" />
+                  Làm nét chữ
+                </span>
+                <span className="font-semibold text-white">{sharpen}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={sharpen}
+                onChange={(e) => setSharpen(parseInt(e.target.value, 10))}
+                onPointerUp={handleSliderChange}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between text-xs text-slate-300 mb-1">
+                <span className="flex items-center gap-1">
+                  <Feather className="w-3.5 h-3.5 text-purple-400" />
+                  Khử nhiễu hạt
+                </span>
+                <span className="font-semibold text-white">{denoise}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={denoise}
+                onChange={(e) => setDenoise(parseInt(e.target.value, 10))}
+                onPointerUp={handleSliderChange}
+                className="w-full accent-emerald-500 cursor-pointer"
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Filters Bar & Bottom Actions */}
       <div className="bg-slate-900/95 border-t border-slate-800 p-3 pb-5 space-y-3 z-50">
-        {/* Filter Presets Pill Carousel */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setShowSliders(!showSliders)}
@@ -260,7 +361,6 @@ export const PageEditor: React.FC = () => {
                 ? 'bg-emerald-600 text-white border-emerald-500'
                 : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
             }`}
-            title="Thanh trượt sáng / tương phản"
           >
             <Sliders className="w-4 h-4" />
             <span>Tinh chỉnh</span>
@@ -315,6 +415,22 @@ export const PageEditor: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Signature & Redaction Modals */}
+      <SignatureModal
+        isOpen={showSignatureModal}
+        onClose={() => setShowSignatureModal(false)}
+        onApplySignature={handleApplySignature}
+      />
+
+      {processedPreviewBlob && (
+        <RedactModal
+          isOpen={showRedactModal}
+          onClose={() => setShowRedactModal(false)}
+          imageBlob={processedPreviewBlob}
+          onApplyRedact={handleApplyRedact}
+        />
+      )}
     </div>
   );
 };

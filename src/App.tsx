@@ -1,20 +1,23 @@
 /**
  * ScanDoc - Mobile-First PWA Document Scanner
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDocStore } from './store/useDocStore.ts';
 import { useAuthStore } from './store/useAuthStore.ts';
 import { useSyncStore } from './store/useSyncStore.ts';
+import { security } from './lib/security.ts';
 import { DocumentList } from './features/documents/DocumentList.tsx';
 import { DocumentDetail } from './features/documents/DocumentDetail.tsx';
 import { CameraCapture } from './features/capture/CameraCapture.tsx';
 import { CornerAdjust } from './features/capture/CornerAdjust.tsx';
 import { PageEditor } from './features/edit/PageEditor.tsx';
+import { PinLockModal } from './features/security/PinLockModal.tsx';
 
 export default function App() {
   const { currentView } = useDocStore();
   const { checkAuth, isAuthenticated } = useAuthStore();
   const { triggerSync, checkPendingCount } = useSyncStore();
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(() => security.isPinSet());
 
   // Initialize session & background sync on mount
   useEffect(() => {
@@ -44,6 +47,15 @@ export default function App() {
 
   return (
     <div className="h-full w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      {/* App Lock Keypad Screen */}
+      {isAppLocked && (
+        <PinLockModal
+          mode="unlock"
+          isOpen={true}
+          onSuccess={() => setIsAppLocked(false)}
+        />
+      )}
+
       {currentView === 'list' && <DocumentList />}
       {currentView === 'detail' && <DocumentDetail />}
       {currentView === 'capture' && <CameraCapture />}

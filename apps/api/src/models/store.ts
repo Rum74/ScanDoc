@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { User, DocumentModel, PageModel, FileModel } from './types.ts';
 import { config } from '../config/index.ts';
+import { connectMongo, isMongoConnected, UserModel, DocModel, PageDocModel, FileRecordModel } from './mongo.ts';
 
 interface DatabaseSchema {
   users: Record<string, User>;
@@ -23,6 +24,44 @@ class Store {
     this.dbFilePath = path.resolve(process.cwd(), 'data/db.json');
     this.ensureDirs();
     this.load();
+    this.initMongo();
+  }
+
+  private async initMongo() {
+    if (config.mongoUri) {
+      const ok = await connectMongo();
+      if (ok) {
+        await this.syncFromMongo();
+      }
+    }
+  }
+
+  private async syncFromMongo() {
+    try {
+      const [users, docs, pages, files] = await Promise.all([
+        UserModel.find().lean(),
+        DocModel.find().lean(),
+        PageDocModel.find().lean(),
+        FileRecordModel.find().lean(),
+      ]);
+
+      for (const u of users) {
+        this.data.users[(u as any).id] = u as any;
+      }
+      for (const d of docs) {
+        this.data.documents[(d as any).id] = d as any;
+      }
+      for (const p of pages) {
+        this.data.pages[(p as any).id] = p as any;
+      }
+      for (const f of files) {
+        this.data.files[(f as any).id] = f as any;
+      }
+      this.persist();
+      console.log(`[Store] Đã nạp ${docs.length} tài liệu từ MongoDB Atlas vào bộ nhớ`);
+    } catch (err) {
+      console.warn('[Store] Lỗi đồng bộ dữ liệu ban đầu từ MongoDB:', err);
+    }
   }
 
   private ensureDirs() {
@@ -68,6 +107,14 @@ class Store {
   saveUser(user: User): User {
     this.data.users[user.id] = user;
     this.persist();
+
+    // Async sync to MongoDB Atlas
+    if (isMongoConnected()) {
+      UserModel.findOneAndUpdate({ id: user.id }, user, { upsert: true }).catch((err) =>
+        console.warn('[Store] Mongo saveUser error:', err)
+      );
+    }
+
     return user;
   }
 
@@ -77,6 +124,13 @@ class Store {
       user.usedBytes = Math.max(0, (user.usedBytes || 0) + deltaBytes);
       user.updatedAt = Date.now();
       this.persist();
+
+      if (isMongoConnected()) {
+        UserModel.updateOne({ id: userId }, { $set: { usedBytes: user.usedBytes, updatedAt: user.updatedAt } }).catch(
+          (err) => console.warn('[Store] Mongo update bytes error:', err)
+        );
+      }
+
       return user.usedBytes;
     }
     return 0;
@@ -98,6 +152,13 @@ class Store {
   saveDocument(doc: DocumentModel): DocumentModel {
     this.data.documents[doc.id] = doc;
     this.persist();
+
+    if (isMongoConnected()) {
+      DocModel.findOneAndUpdate({ id: doc.id }, doc, { upsert: true }).catch((err) =>
+        console.warn('[Store] Mongo saveDocument error:', err)
+      );
+    }
+
     return doc;
   }
 
@@ -123,6 +184,13 @@ class Store {
   savePage(page: PageModel): PageModel {
     this.data.pages[page.id] = page;
     this.persist();
+
+    if (isMongoConnected()) {
+      PageDocModel.findOneAndUpdate({ id: page.id }, page, { upsert: true }).catch((err) =>
+        console.warn('[Store] Mongo savePage error:', err)
+      );
+    }
+
     return page;
   }
 
@@ -134,6 +202,13 @@ class Store {
   saveFile(file: FileModel): FileModel {
     this.data.files[file.id] = file;
     this.persist();
+
+    if (isMongoConnected()) {
+      FileRecordModel.findOneAndUpdate({ id: file.id }, file, { upsert: true }).catch((err) =>
+        console.warn('[Store] Mongo saveFile error:', err)
+      );
+    }
+
     return file;
   }
 
@@ -150,6 +225,13 @@ class Store {
       this.updateUserUsedBytes(f.userId, -f.sizeBytes);
       delete this.data.files[id];
       this.persist();
+
+      if (isMongoConnected()) {
+        FileRecordModel.deleteOne({ id }).catch((err) =>
+          console.warn('[Store] Mongo deleteFile error:', err)
+        );
+      }
+
       return true;
     }
     return false;

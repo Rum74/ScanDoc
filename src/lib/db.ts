@@ -26,6 +26,8 @@ export interface LocalPage {
   filter: FilterType;
   brightness: number; // -50 to 50
   contrast: number; // -50 to 50
+  sharpen?: number; // 0 to 100
+  denoise?: number; // 0 to 100
   processedBlob?: Blob; // Cache of warped & filtered image
   thumbnailBlob?: Blob; // Small thumbnail
   ocrText?: string;

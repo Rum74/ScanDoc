@@ -1,14 +1,13 @@
-# Multi-stage Dockerfile for ScanDoc API
-# Stage 1: Build
+# Multi-stage Dockerfile for ScanDoc API & Fullstack Web
+# Stage 1: Build Frontend Assets
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --include=dev
+RUN npm install --legacy-peer-deps
 
 COPY . .
-# We use tsx or compile TypeScript
-RUN npm run build || true
+RUN npm run build
 
 # Stage 2: Production Runner
 FROM node:20-alpine AS runner
@@ -20,10 +19,12 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
 COPY package*.json ./
-RUN npm ci --only=production && \
+RUN npm install --omit=dev --legacy-peer-deps && \
     npm install -g tsx
 
 COPY --chown=nodejs:nodejs . .
+# Copy compiled frontend from builder stage
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 
 # Create uploads directory and permissions
 RUN mkdir -p /data/uploads /data/db && \

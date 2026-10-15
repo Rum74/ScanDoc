@@ -1,0 +1,33 @@
+version: '3.8'
+
+# ==============================================================================
+# ScanDoc Docker Compose - Chế độ Siêu Nhẹ (Dùng MongoDB Atlas Cloud)
+# Chạy trên port 3050, KHÔNG cần chạy container Mongo nội bộ, tiết kiệm RAM VPS!
+# ==============================================================================
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3050:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DOMAIN=scandoc.click
+      - MONGO_URI=mongodb+srv://huynhvanphong7402_db_user:rIaZ7RXFv2VMPfSY@cluster0.yjxovpz.mongodb.net/scandoc?retryWrites=true&w=majority&appName=Cluster0
+      - JWT_SECRET=scandoc_jwt_947f89b6c430e7fa1209b55891d4e0e8f3b2a1975e840d
+      - REFRESH_SECRET=scandoc_refresh_8b21c49e0f31a78dc1249b55891d4e0e8f3b2a1975e840
+      - UPLOAD_DIR=/data/uploads
+      - MAX_USER_BYTES=1073741824
+    volumes:
+      - /data/uploads:/data/uploads
+      - /data/db:/data/db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
