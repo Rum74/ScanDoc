@@ -13,18 +13,25 @@ echo "============================================================"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-# 1. Chạy container ScanDoc và MongoDB ở port nội bộ 3050
-docker compose -f docker-compose.coexist.yml up -d --build
+# 1. Dừng container cũ và build lại từ đầu không dùng cache
+docker compose -f docker-compose.coexist.yml down || true
+docker compose -f docker-compose.coexist.yml build --no-cache
+docker compose -f docker-compose.coexist.yml up -d
 
 # 2. Kiểm tra dịch vụ
 echo "⏳ Đang kiểm tra ứng dụng tại http://127.0.0.1:3050/api/health..."
-sleep 8
+sleep 6
 
-if curl -s http://127.0.0.1:3050/api/health | grep -q '"status":"ok"'; then
-  echo "✅ ScanDoc đã khởi động thành công trên cổng nội bộ 3050!"
+HEALTH_RES=$(curl -s http://127.0.0.1:3050/api/health || echo "FAILED")
+echo "Chi tiết API Health:"
+echo "$HEALTH_RES"
+
+if echo "$HEALTH_RES" | grep -q '"status":"ok"'; then
   echo ""
-  echo "👉 Bước tiếp theo: Cấu hình Web Server hiện tại (Nginx/aaPanel) để chuyển tiếp scandoc.click sang port 3050."
-  echo "   (Xem file nginx-scandoc.conf để copy cấu hình)"
+  echo "✅ ScanDoc đã khởi động thành công trên cổng 3050!"
+  echo "🌐 Test trực tiếp: http://221.121.1.220:3050"
+  echo "🌐 Domain: http://scandoc.click (cần Nginx reverse proxy sang port 3050)"
+  echo "⚠️ Nếu trình duyệt hiển thị bản cũ, hãy mở Tab Ẩn danh hoặc bấm Ctrl+Shift+R."
 else
   echo "⚠️ Đang khởi động, kiểm tra log bằng: docker compose -f docker-compose.coexist.yml logs -f"
 fi

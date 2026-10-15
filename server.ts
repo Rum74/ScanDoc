@@ -19,7 +19,7 @@ async function startServer() {
     const indexHtml = path.resolve(distPath, 'index.html');
 
     if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
+      app.use(express.static(distPath, { index: false }));
     }
 
     app.get('*', (req, res, next) => {
@@ -27,6 +27,11 @@ async function startServer() {
       if (req.path.startsWith('/api')) {
         return next();
       }
+
+      // Never cache index.html so PWA/SPA clients always get the newest bundles
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
 
       if (fs.existsSync(indexHtml)) {
         res.sendFile(indexHtml);
