@@ -1,16 +1,16 @@
 # Multi-stage Dockerfile for ScanDoc API & Fullstack Web
 # Stage 1: Build Frontend Assets
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 COPY . .
 RUN npm run build
 
 # Stage 2: Production Runner
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -18,13 +18,11 @@ ENV NODE_ENV=production
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-COPY package*.json ./
-RUN npm install --omit=dev --legacy-peer-deps && \
-    npm install -g tsx
-
 COPY --chown=nodejs:nodejs . .
 # Copy compiled frontend from builder stage
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+# Copy pre-installed node_modules from builder (saves ~500s build time on VPS!)
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # Create uploads directory and permissions
 RUN mkdir -p /data/uploads /data/db && \
@@ -33,4 +31,4 @@ RUN mkdir -p /data/uploads /data/db && \
 USER nodejs
 
 EXPOSE 3000
-CMD ["tsx", "server.ts"]
+CMD ["node_modules/.bin/tsx", "server.ts"]

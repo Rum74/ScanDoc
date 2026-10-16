@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ==============================================================================
 # ScanDoc Docker Compose - Chế độ Siêu Nhẹ (Dùng MongoDB Atlas Cloud)
 # Chạy trên port 3050, KHÔNG cần chạy container Mongo nội bộ, tiết kiệm RAM VPS!
